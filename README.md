@@ -27,7 +27,7 @@ O servidor escuta em `127.0.0.1:5000` (constantes `HOST`/`PORT` no topo de `serv
 | `protocol.py` | Contrato de mensagens entre cliente e servidor (comandos, separador, helpers) |
 | `validation.py` | Validação dos dados de um paciente antes de gravar |
 | `db.py` | Acesso a dados (SQLite), sem ORM |
-| `server.py` | Servidor TCP: aceita um cliente de cada vez, despacha comandos |
+| `server.py` | Servidor TCP: aceita ligações (uma thread por cliente), despacha comandos |
 | `client.py` | Cliente TCP: menu de terminal com interface `rich`, que limpa o ecrã entre operações |
 
 ## Protocolo
@@ -86,10 +86,4 @@ CREATE TABLE patients (
 
 ## Modelo de concorrência
 
-O servidor atende **um cliente de cada vez** (loop simples de `accept()`, sem threads) — suficiente para o requisito e mais fácil de seguir passo a passo. Uma evolução natural para atender vários clientes em simultâneo seria criar uma `threading.Thread` por ligação aceite, com cuidado extra na partilha da ligação SQLite entre threads.
-
-## Próximos passos possíveis
-
-- Expor o servidor ao browser através de uma ponte WebSocket (mantendo o servidor TCP interno).
-- Suporte a múltiplos clientes em simultâneo com `threading`.
-# clinica
+O servidor atende vários clientes em simultâneo: cada ligação aceite corre numa `threading.Thread` própria (`server.py`), o loop principal fica só a aceitar ligações e nunca bloqueia à espera de um cliente terminar. Cada thread abre a sua própria ligação SQLite (`db.connect()`), porque uma ligação `sqlite3.Connection` não é thread-safe. Para evitar erros de `database is locked` quando duas threads escrevem ao mesmo tempo, a ligação ativa `PRAGMA busy_timeout = 5000`, que faz o SQLite esperar até 5 segundos por um lock em vez de falhar de imediato.
